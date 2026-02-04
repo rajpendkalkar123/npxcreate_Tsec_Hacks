@@ -1,0 +1,45 @@
+# Environment variables (sensitive data)
+.env
+.env.local
+.env.production
+
+# Hardhat files
+cache
+artifacts
+deployments/*.json
+
+# Dependencies
+node_modules
+package-lock.json
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage
+coverage.json
+.coverage_artifacts
+.coverage_cache
+.coverage_contracts
+
+# TypeScript
+*.tsbuildinfo
+
+# Build outputs
+dist
+build
+
+# Logs
+*.log
+logs
+
+# Test outputs
+test-results

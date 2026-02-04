@@ -1,0 +1,88 @@
+{
+  "name": "eNWR - Wheat Receipt #WB/MUM/2024/001",
+  "description": "WDRA-compliant Electronic Negotiable Warehouse Receipt for agricultural commodities",
+  "image": "ipfs://QmExampleImageHash/warehouse_wheat.jpg",
+  "external_url": "https://croplock.example.com/receipt/1",
+  "attributes": [
+    {
+      "trait_type": "Receipt Number",
+      "value": "WB/MUM/2024/001"
+    },
+    {
+      "trait_type": "WDRA Registration No",
+      "value": "WDRA-MH-2023-123"
+    },
+    {
+      "trait_type": "Depositor Account No",
+      "value": "FAR-001-2024"
+    },
+    {
+      "trait_type": "Commodity Name",
+      "value": "Wheat"
+    },
+    {
+      "trait_type": "Quality/Grade",
+      "value": "FAQ (Fair Average Quality)"
+    },
+    {
+      "trait_type": "No. of Packages",
+      "value": 100
+    },
+    {
+      "trait_type": "Quantity (kg)",
+      "value": 5000
+    },
+    {
+      "trait_type": "Market Value at Deposit",
+      "value": "₹25,000"
+    },
+    {
+      "trait_type": "Stack/Lot Number",
+      "value": "STACK-A-12"
+    },
+    {
+      "trait_type": "Warehouse Location",
+      "value": "Mumbai Central Warehouse, Maharashtra"
+    },
+    {
+      "trait_type": "Insurance Policy No",
+      "value": "INS-2024-FIRE-XYZ789"
+    },
+    {
+      "trait_type": "Insurance Company",
+      "value": "National Insurance Company Ltd."
+    },
+    {
+      "trait_type": "Insurance Valid From",
+      "value": "2024-01-01"
+    },
+    {
+      "trait_type": "Insurance Valid To",
+      "value": "2024-12-31"
+    },
+    {
+      "trait_type": "Storage Rate",
+      "value": "₹2.00/kg/month"
+    },
+    {
+      "trait_type": "Handling Rate",
+      "value": "₹0.50/kg"
+    },
+    {
+      "trait_type": "Receipt Issued Date",
+      "value": "2024-01-15"
+    },
+    {
+      "trait_type": "Valid Until",
+      "value": "2024-12-31"
+    },
+    {
+      "trait_type": "Depositor Name",
+      "value": "Ramesh Kumar"
+    },
+    {
+      "trait_type": "Warehouseman Name",
+      "value": "Maharashtra Warehousing Corp."
+    }
+  ]
+}
