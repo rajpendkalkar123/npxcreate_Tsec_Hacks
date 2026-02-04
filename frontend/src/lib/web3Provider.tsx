@@ -16,8 +16,10 @@ interface Web3ContextType {
   address: string | null
   role: 'farmer' | 'bank' | 'authority' | null
   isConnected: boolean
+  authMethod: 'privy' | 'metamask' | null  // Track how user authenticated
   connectWallet: () => Promise<void>
   disconnectWallet: () => void
+  setPrivyAuth: (walletAddress: string) => void  // For Privy embedded wallet
   contracts: {
     rangerToken: Contract | null
     marketplace: Contract | null
@@ -34,12 +36,30 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null)
   const [role, setRole] = useState<'farmer' | 'bank' | 'authority' | null>(null)
   const [isConnected, setIsConnected] = useState(false)
+  const [authMethod, setAuthMethod] = useState<'privy' | 'metamask' | null>(null)
   const [contracts, setContracts] = useState<Web3ContextType['contracts']>({
     rangerToken: null,
     marketplace: null,
     lendingPool: null,
     roleRegistry: null
   })
+
+  // Load auth state on mount
+  useEffect(() => {
+    const savedAuthMethod = localStorage.getItem('auth_method') as 'privy' | 'metamask' | null
+    const savedAddress = localStorage.getItem('wallet_address')
+    const isLoggingOut = localStorage.getItem('is_logging_out') === 'true'
+    
+    // Don't restore session if user is logging out
+    if (savedAuthMethod === 'privy' && savedAddress && !isLoggingOut) {
+      // Restore Privy session (backend handles crypto, user just authenticated)
+      setAddress(savedAddress)
+      setIsConnected(true)
+      setAuthMethod('privy')
+      loadManualRole()
+      console.log('✅ Privy session restored')
+    }
+  }, [])
 
   // ✅ SIMPLIFIED: Only use manual role selection from localStorage (NO blockchain detection)
   const loadManualRole = () => {
@@ -53,6 +73,17 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     }
   }
 
+  // NEW: Set Privy authentication (no MetaMask needed)
+  const setPrivyAuth = (walletAddress: string) => {
+    setAddress(walletAddress)
+    setIsConnected(true)
+    setAuthMethod('privy')
+    localStorage.setItem('auth_method', 'privy')
+    localStorage.setItem('wallet_address', walletAddress)
+    loadManualRole()
+    console.log('✅ Privy auth set, wallet abstracted for user')
+  }
+
   const connectWallet = async () => {
     if (typeof window.ethereum === 'undefined') {
       alert('Please install MetaMask!')
@@ -60,6 +91,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     }
 
     try {
+      setAuthMethod('metamask')
+      localStorage.setItem('auth_method', 'metamask')
       const browserProvider = new BrowserProvider(window.ethereum)
       
       // Request account access
@@ -137,6 +170,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     setAddress(null)
     setRole(null)
     setIsConnected(false)
+    setAuthMethod(null)
     setContracts({
       rangerToken: null,
       marketplace: null,
@@ -144,9 +178,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       roleRegistry: null
     })
     
-    // ✅ CRITICAL: Clear manual role selection on disconnect
+    // Clear all auth data
     localStorage.removeItem('user_role_manual')
-    console.log('🔓 Manual role selection cleared')
+    localStorage.removeItem('auth_method')
+    localStorage.removeItem('wallet_address')
+    console.log('🔓 All auth data cleared')
     
     document.cookie = "wallet_address=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
     document.cookie = "finternet_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
@@ -183,9 +219,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         signer, 
         address, 
         role, 
-        isConnected, 
+        isConnected,
+        authMethod,
         connectWallet, 
         disconnectWallet,
+        setPrivyAuth,
         contracts 
       }}
     >

@@ -12,6 +12,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import data from "./data.json"
 import { useWeb3 } from "@/lib/web3Provider"
+import { usePrivy } from "@privy-io/react-auth"
 import { CropInspectionForm } from "@/components/authority/crop-inspection-form"
 import { AssetList } from "@/components/farmer/asset-list"
 import { ListForSale } from "@/components/farmer/list-for-sale"
@@ -26,7 +27,8 @@ import { ActiveLoans } from "@/components/farmer/active-loans"
 export default function Page() {
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
-  const { role, isConnected, address, disconnectWallet } = useWeb3()
+  const { role, isConnected, address, disconnectWallet, connectWallet, authMethod } = useWeb3()
+  const { logout: privyLogout, authenticated: privyAuthenticated } = usePrivy()
   const [showQRScanner, setShowQRScanner] = useState(false)
   const [selectedTokenForSale, setSelectedTokenForSale] = useState<bigint | null>(null)
   const [selectedTokenForLoan, setSelectedTokenForLoan] = useState<bigint | null>(null)
@@ -37,15 +39,35 @@ export default function Page() {
     setMounted(true)
   }, [])
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    // Set logout flag to prevent auto-redirect
+    localStorage.setItem('is_logging_out', 'true')
+    
+    // Logout from Privy if authenticated via Privy
+    if (authMethod === 'privy' && privyAuthenticated) {
+      try {
+        await privyLogout()
+        // Small delay to ensure Privy logout completes
+        await new Promise(resolve => setTimeout(resolve, 300))
+      } catch (error) {
+        console.error('Privy logout error:', error)
+      }
+    }
+    
+    // Clear Web3 state (this also clears localStorage role)
     disconnectWallet()
-    document.cookie = "finternet_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC"
-    router.push('/')
+    
+    // Force complete cleanup
+    sessionStorage.clear()
+    
+    // Force hard reload to clear all React state and Privy session
+    window.location.href = '/'
   }
 
   if (!mounted) return null
 
-  if (!isConnected) {
+  // Only require wallet connection for MetaMask users (Privy users bypass this)
+  if (!isConnected && authMethod !== 'privy') {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center bg-white p-8 rounded-lg shadow-lg max-w-md">
@@ -53,8 +75,14 @@ export default function Page() {
           <h2 className="text-2xl font-bold mb-4 text-gray-800">Wallet Not Connected</h2>
           <p className="text-gray-600 mb-6">Please connect your MetaMask wallet to continue</p>
           <button 
+            onClick={() => connectWallet()}
+            className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 mb-3 w-full"
+          >
+            🦊 Connect MetaMask
+          </button>
+          <button 
             onClick={() => router.push('/')}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700"
+            className="block w-full bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300"
           >
             Go to Login
           </button>

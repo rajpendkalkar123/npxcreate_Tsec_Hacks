@@ -1,3 +1,23 @@
+/**
+ * 🏦 FINTERNET PAYMENT GATEWAY - INR Abstraction Layer
+ * 
+ * This module handles all payment operations through the Finternet payment rail.
+ * 
+ * KEY ARCHITECTURE:
+ * 1. Users only see and interact with INR (₹)
+ * 2. Backend automatically converts INR ↔ USD for blockchain settlements
+ * 3. All crypto operations (gas fees, wallet management) are abstracted away
+ * 4. Supports:
+ *    - Marketplace purchases (Delivery vs Payment escrow)
+ *    - Loan disbursements (to bank accounts)
+ *    - Loan repayments (auto-deducted)
+ * 
+ * USER FLOW:
+ * Privy Login (Email) → Dashboard → Pay in INR → Finternet Gateway → Blockchain Settlement
+ * 
+ * No MetaMask or crypto knowledge required for end users!
+ */
+
 import axios from 'axios'
 
 const FINTERNET_API_URL = 'https://api.fmm.finternetlab.io/api/v1'
@@ -26,24 +46,42 @@ export interface PaymentIntentResponse {
 }
 
 /**
+ * 💰 INR to Crypto conversion (Hidden from user)
+ * Exchange rate: 1 USD ≈ 83 INR (approximate)
+ */
+export function convertINRtoUSD(amountINR: number): string {
+  const USD_TO_INR = 83
+  const amountUSD = amountINR / USD_TO_INR
+  return amountUSD.toFixed(2)
+}
+
+export function convertUSDtoINR(amountUSD: number): number {
+  const USD_TO_INR = 83
+  return Math.round(amountUSD * USD_TO_INR)
+}
+
+/**
  * Create Payment Intent for Marketplace Purchase (DVP Escrow)
+ * User sees INR, backend handles crypto via Finternet
  */
 export async function createMarketplacePayment(
-  amount: string,
-  currency: string = 'USD',
+  amountINR: number,  // User input in INR
   metadata?: any
 ): Promise<PaymentIntentResponse> {
+  const amountUSD = convertINRtoUSD(amountINR)
+  
   const response = await finternetClient.post('/payment-intents', {
-    amount,
-    currency,
+    amount: amountUSD,
+    currency: 'USD',  // Finternet gateway handles USD
     type: 'DELIVERY_VS_PAYMENT',
     settlementMethod: 'OFF_RAMP_MOCK',
     settlementDestination: 'bank_account_farmer',
-    description: `Marketplace purchase - Token #${metadata?.tokenId || 'Unknown'}`,
+    description: `Marketplace purchase ₹${amountINR.toLocaleString('en-IN')} - Token #${metadata?.tokenId || 'Unknown'}`,
     metadata: {
       releaseType: 'AUTO_RELEASE',
       deliveryPeriod: '24h',
       autoRelease: true,
+      amountINR,  // Store original INR amount
       ...metadata
     }
   })
@@ -51,43 +89,49 @@ export async function createMarketplacePayment(
 }
 
 /**
- * Create Payment Intent for Loan Disbursement
+ * Create Payment Intent for Loan Disbursement (INR input)
  */
 export async function createLoanDisbursement(
-  amount: string,
+  amountINR: number,
   farmerBankAccount: string,
   loanId: string
 ): Promise<PaymentIntentResponse> {
+  const amountUSD = convertINRtoUSD(amountINR)
+  
   const response = await finternetClient.post('/payment-intents', {
-    amount,
+    amount: amountUSD,
     currency: 'USD',
     type: 'CONSENTED_PULL',
     settlementMethod: 'OFF_RAMP_TO_RTP',
     settlementDestination: farmerBankAccount,
-    description: `Loan disbursement - ${loanId}`,
+    description: `Loan disbursement ₹${amountINR.toLocaleString('en-IN')} - ${loanId}`,
     metadata: {
       loanId,
-      purpose: 'AGRICULTURAL_LOAN'
+      purpose: 'AGRICULTURAL_LOAN',
+      amountINR
     }
   })
   return response.data
 }
 
 /**
- * Create Payment Intent for Loan Repayment
+ * Create Payment Intent for Loan Repayment (INR input)
  */
 export async function createLoanRepayment(
-  amount: string,
+  amountINR: number,
   loanId: string
 ): Promise<PaymentIntentResponse> {
+  const amountUSD = convertINRtoUSD(amountINR)
+  
   const response = await finternetClient.post('/payment-intents', {
-    amount,
+    amount: amountUSD,
     currency: 'USD',
     type: 'CONSENTED_PULL',
-    description: `Loan repayment - ${loanId}`,
+    description: `Loan repayment ₹${amountINR.toLocaleString('en-IN')} - ${loanId}`,
     metadata: {
       loanId,
-      purpose: 'LOAN_REPAYMENT'
+      purpose: 'LOAN_REPAYMENT',
+      amountINR
     }
   })
   return response.data
