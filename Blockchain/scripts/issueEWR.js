@@ -69,6 +69,9 @@ async function main() {
 
   // Step 3: Create and upload metadata to IPFS
   console.log('\n3️⃣  Creating WDRA Form A metadata...');
+  const currentDate = new Date();
+  const expiryDate = new Date(currentDate.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year from now
+  
   const receiptData = {
     receiptNumber: 'WB/MUM/2024/001',
     wdraRegNo: 'WDRA-MH-2023-123',
@@ -82,18 +85,19 @@ async function main() {
     warehouseLocation: 'Mumbai Central Warehouse, Maharashtra',
     insurancePolicyNo: 'INS-2024-FIRE-XYZ789',
     insuranceCompany: 'National Insurance Company Ltd.',
-    insuranceValidFrom: '2024-01-01',
-    insuranceValidTo: '2024-12-31',
+    insuranceValidFrom: currentDate.toISOString().split('T')[0],
+    insuranceValidTo: expiryDate.toISOString().split('T')[0],
     storageRate: '₹2.00/kg/month',
     handlingRate: '₹0.50/kg',
-    issuedDate: new Date().toISOString().split('T')[0],
-    validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    issuedDate: currentDate.toISOString().split('T')[0],
+    validUntil: expiryDate.toISOString().split('T')[0], // 1 year expiry
     depositorName: 'Ramesh Kumar',
     warehousemanName: 'Maharashtra Warehousing Corp.'
   };
 
   const metadata = createWDRAMetadata(receiptData);
-  console.log('   ✅ Metadata created');
+  console.log('   ✅ Metadata created (1 year expiry)');
+  console.log('   📅 Valid until:', receiptData.validUntil);
 
   console.log('\n4️⃣  Uploading to IPFS via Pinata...');
   const { ipfsHash, ipfsUrl } = await uploadJsonToPinata(

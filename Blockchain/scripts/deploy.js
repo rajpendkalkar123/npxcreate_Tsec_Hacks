@@ -66,6 +66,12 @@ async function main() {
   const MINTER_ROLE = await rangerToken.MINTER_ROLE();
   const BANK_ROLE = await rangerToken.BANK_ROLE();
 
+  // Link RoleRegistry to RangerToken (NEW SECURITY FEATURE)
+  console.log("🔗 Linking RoleRegistry to RangerToken...");
+  const setRangerTokenTx = await roleRegistry.setRangerToken(rangerTokenAddress);
+  await setRangerTokenTx.wait();
+  console.log("✅ RoleRegistry linked to RangerToken (deactivation protection enabled)");
+
   // Example: Grant BANK_ROLE to LendingPool contract
   const grantBankRoleTx = await rangerToken.grantRole(BANK_ROLE, lendingPoolAddress);
   await grantBankRoleTx.wait();
@@ -90,6 +96,11 @@ async function main() {
   console.log("   3. Register banks: roleRegistry.registerBank(...)");
   console.log("   4. Grant MINTER_ROLE to warehouse operators");
   console.log("   5. Verify contracts on block explorer (if applicable)");
+  console.log("");
+  console.log("🔒 Security Features:");
+  console.log("   ✅ Warehouses cannot be deactivated with active tokens");
+  console.log("   ✅ Token expiry: 1 year from issuance (WDRA compliant)");
+  console.log("   ✅ Deactivation only allowed after all tokens expire/burn");
   console.log("");
 
   // Save deployment info
