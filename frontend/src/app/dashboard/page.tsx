@@ -23,6 +23,8 @@ import { PledgedTokens } from "@/components/bank/pledged-tokens"
 import { OfferLoan } from "@/components/bank/offer-loan"
 import { LoanOffers } from "@/components/farmer/loan-offers"
 import { ActiveLoans } from "@/components/farmer/active-loans"
+import { RoleManagement } from "@/components/admin/role-management"
+import { PlatformFeeManager } from "@/components/admin/platform-fee-manager"
 
 export default function Page() {
   const [mounted, setMounted] = useState(false)
@@ -121,6 +123,42 @@ export default function Page() {
           <div className="flex flex-1 flex-col p-6">
             <h1 className="text-3xl font-bold mb-6">Warehouse Authority Dashboard</h1>
             <CropInspectionForm />
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    )
+  }
+
+  // ADMIN VIEW
+  if (role === 'admin') {
+    return (
+      <SidebarProvider
+        style={
+          {
+            "--sidebar-width": "calc(var(--spacing) * 72)",
+            "--header-height": "calc(var(--spacing) * 12)",
+          } as React.CSSProperties
+        }
+      >
+        <AppSidebar variant="inset" />
+        <SidebarInset>
+          <SiteHeader />
+          <div className="flex flex-1 flex-col p-6">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+                <span className="text-4xl">👑</span>
+                Admin Dashboard
+              </h1>
+              <p className="text-gray-600">Manage role-based access and platform revenue</p>
+            </div>
+            
+            {/* Platform Fee Manager - Revenue Dashboard */}
+            <div className="mb-8">
+              <PlatformFeeManager />
+            </div>
+
+            {/* Role Management */}
+            <RoleManagement />
           </div>
         </SidebarInset>
       </SidebarProvider>
