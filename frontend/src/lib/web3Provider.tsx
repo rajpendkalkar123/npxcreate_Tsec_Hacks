@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { BrowserProvider, Contract, JsonRpcSigner } from 'ethers'
+import { BrowserProvider, Contract, JsonRpcSigner, JsonRpcProvider } from 'ethers'
 import { CONTRACT_ADDRESSES, HOODI_CONFIG } from './contracts'
 
 // Import ABIs
@@ -14,7 +14,7 @@ interface Web3ContextType {
   provider: BrowserProvider | null
   signer: JsonRpcSigner | null
   address: string | null
-  role: 'farmer' | 'bank' | 'authority' | null
+  role: 'farmer' | 'bank' | 'authority' | 'admin' | null
   isConnected: boolean
   authMethod: 'privy' | 'metamask' | null  // Track how user authenticated
   connectWallet: () => Promise<void>
@@ -34,7 +34,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const [provider, setProvider] = useState<BrowserProvider | null>(null)
   const [signer, setSigner] = useState<JsonRpcSigner | null>(null)
   const [address, setAddress] = useState<string | null>(null)
-  const [role, setRole] = useState<'farmer' | 'bank' | 'authority' | null>(null)
+  const [role, setRole] = useState<'farmer' | 'bank' | 'authority' | 'admin' | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [authMethod, setAuthMethod] = useState<'privy' | 'metamask' | null>(null)
   const [contracts, setContracts] = useState<Web3ContextType['contracts']>({
@@ -52,11 +52,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     
     // Don't restore session if user is logging out
     if (savedAuthMethod === 'privy' && savedAddress && !isLoggingOut) {
-      // Restore Privy session (backend handles crypto, user just authenticated)
-      setAddress(savedAddress)
-      setIsConnected(true)
-      setAuthMethod('privy')
-      loadManualRole()
+      // Restore Privy session and initialize contracts
+      setPrivyAuth(savedAddress)
       console.log('✅ Privy session restored')
     }
   }, [])
@@ -64,9 +61,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   // ✅ SIMPLIFIED: Only use manual role selection from localStorage (NO blockchain detection)
   const loadManualRole = () => {
     const manualRole = localStorage.getItem('user_role_manual')
-    if (manualRole && (manualRole === 'farmer' || manualRole === 'bank' || manualRole === 'authority')) {
+    if (manualRole && (manualRole === 'farmer' || manualRole === 'bank' || manualRole === 'authority' || manualRole === 'admin')) {
       console.log('✅ Using manually selected role:', manualRole)
-      setRole(manualRole as 'farmer' | 'bank' | 'authority')
+      setRole(manualRole as 'farmer' | 'bank' | 'authority' | 'admin')
     } else {
       console.log('⚠️ No role selected yet')
       setRole(null)
@@ -74,14 +71,81 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   }
 
   // NEW: Set Privy authentication (no MetaMask needed)
-  const setPrivyAuth = (walletAddress: string) => {
-    setAddress(walletAddress)
-    setIsConnected(true)
-    setAuthMethod('privy')
-    localStorage.setItem('auth_method', 'privy')
-    localStorage.setItem('wallet_address', walletAddress)
-    loadManualRole()
-    console.log('✅ Privy auth set, wallet abstracted for user')
+  const setPrivyAuth = async (walletAddress: string) => {
+    try {
+      setAddress(walletAddress)
+      setIsConnected(true)
+      setAuthMethod('privy')
+      localStorage.setItem('auth_method', 'privy')
+      localStorage.setItem('wallet_address', walletAddress)
+      loadManualRole()
+      
+      // Give Privy a moment to inject its wallet provider
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Try to use Privy's embedded wallet provider
+      let signerInstance = null
+      let browserProvider = null
+
+      if (typeof window.ethereum !== 'undefined') {
+        try {
+          // Use the injected provider from Privy
+          browserProvider = new BrowserProvider(window.ethereum)
+          
+          // Request accounts to trigger Privy's wallet
+          const accounts = await browserProvider.send("eth_accounts", [])
+          if (accounts && accounts.length > 0) {
+            signerInstance = await browserProvider.getSigner()
+            setProvider(browserProvider)
+            setSigner(signerInstance)
+            console.log('✅ Using Privy embedded wallet provider with signer')
+          }
+        } catch (signerError) {
+          console.log('⚠️ Signer not available yet:', signerError)
+        }
+      }
+
+      // If signer not available, use read-only provider for contract reading
+      if (!signerInstance) {
+        // Use public RPC for reading blockchain data
+        const readOnlyProvider = new JsonRpcProvider(HOODI_CONFIG.rpcUrl)
+        browserProvider = readOnlyProvider as any
+        setProvider(browserProvider)
+        console.log('✅ Using read-only provider for Privy (transactions will be handled when wallet activates)')
+      }
+
+      // Initialize contracts (with signer if available, otherwise read-only)
+      const contractProvider = signerInstance || browserProvider
+      
+      const rangerToken = new Contract(
+        CONTRACT_ADDRESSES.RangerToken,
+        RangerTokenABI.abi,
+        contractProvider
+      )
+      const marketplace = new Contract(
+        CONTRACT_ADDRESSES.Marketplace,
+        MarketplaceABI.abi,
+        contractProvider
+      )
+      const lendingPool = new Contract(
+        CONTRACT_ADDRESSES.LendingPool,
+        LendingPoolABI.abi,
+        contractProvider
+      )
+      const roleRegistry = new Contract(
+        CONTRACT_ADDRESSES.RoleRegistry,
+        RoleRegistryABI.abi,
+        contractProvider
+      )
+
+      setContracts({ rangerToken, marketplace, lendingPool, roleRegistry })
+      console.log('✅ Privy contracts initialized', signerInstance ? 'with signer' : 'read-only')
+      
+    } catch (error) {
+      console.error('Error initializing Privy:', error)
+      // Even if contract init fails, keep the basic auth
+      console.log('⚠️ Privy auth set, but contracts initialization failed')
+    }
   }
 
   const connectWallet = async () => {
