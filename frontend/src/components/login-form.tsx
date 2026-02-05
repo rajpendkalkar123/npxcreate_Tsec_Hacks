@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { useWeb3 } from "@/lib/web3Provider" // MetaMask Hook
 import { usePrivy } from "@privy-io/react-auth" // Privy Hook
 
-type UserRole = 'farmer' | 'bank' | 'authority'
+type UserRole = 'farmer' | 'bank' | 'authority' | 'admin'
 
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
   // State
@@ -82,7 +82,14 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     try {
       setIsLoading(true)
       await connectWallet()
-      setStep('phone-input') 
+      
+      // Admin users skip phone input and go directly to dashboard
+      if (selectedRole === 'admin') {
+        document.cookie = "finternet_auth=true; path=/"
+        router.push("/dashboard")
+      } else {
+        setStep('phone-input')
+      }
     } catch (error) {
       console.error("Failed to connect wallet:", error)
       alert("Failed to connect wallet.")
@@ -115,6 +122,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       case 'authority': return '🏢'
       case 'bank': return '🏦'
       case 'farmer': return '🌾'
+      case 'admin': return '👑'
     }
   }
 
@@ -123,6 +131,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
       case 'authority': return 'Warehouse Authority'
       case 'bank': return 'Bank/Lender'
       case 'farmer': return 'Farmer'
+      case 'admin': return 'Admin'
     }
   }
 
@@ -143,7 +152,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           <div className="space-y-3">
             <label className="text-white/90 text-sm font-semibold">Choose User Type</label>
             <div className="grid grid-cols-1 gap-4">
-              {(['farmer', 'authority', 'bank'] as UserRole[]).map((role) => (
+              {(['farmer', 'authority', 'bank', 'admin'] as UserRole[]).map((role) => (
                 <button
                   key={role}
                   type="button"
