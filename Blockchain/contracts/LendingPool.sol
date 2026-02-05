@@ -16,6 +16,11 @@ contract LendingPool is ReentrancyGuard {
     RoleRegistry public roleRegistry;
     IFinternetGateway public finternetGateway;
 
+    // Platform fee configuration
+    address public platformAdmin;
+    uint256 public platformFeeRate = 500; // 5% of interest earned (500 basis points)
+    uint256 public collectedFees; // Total fees collected
+    
     struct LoanOffer {
         address lender;
         uint256 tokenId;
@@ -53,8 +58,10 @@ contract LendingPool is ReentrancyGuard {
         uint256 loanAmount
     );
     event LoanAccepted(uint256 indexed offerId, uint256 disbursedAt);
-    event LoanRepaid(uint256 indexed offerId, uint256 repaidAt);
+    event LoanRepaid(uint256 indexed offerId, uint256 repaidAt, uint256 platformFee);
     event CollateralLiquidated(uint256 indexed offerId, uint256 timestamp);
+    event PlatformFeeCollected(uint256 amount, uint256 totalCollected);
+    event PlatformFeeWithdrawn(address indexed admin, uint256 amount);
 
     constructor(
         address _rangerToken,
@@ -68,10 +75,12 @@ contract LendingPool is ReentrancyGuard {
         rangerToken = RangerToken(_rangerToken);
         roleRegistry = RoleRegistry(_roleRegistry);
         finternetGateway = IFinternetGateway(_finternetGateway);
+        platformAdmin = msg.sender; // Deployer is the platform admin
     }
 
     /**
-     * @notice Bank offers a loan against pledged eNWR collateral
+     * @notice Lender offers a loan against pledged eNWR collateral
+     * @dev Anyone can offer loans - banks, individuals, or entities
      * @param farmer Address of the farmer
      * @param tokenId The token ID pledged as collateral
      * @param collateralAmount Quantity pledged (kg)
@@ -88,7 +97,7 @@ contract LendingPool is ReentrancyGuard {
         uint256 interestRate,
         uint256 duration
     ) external nonReentrant returns (uint256) {
-        require(roleRegistry.isBankActive(msg.sender), "Bank not active");
+        // Removed bank role check - anyone can be a lender
         require(farmer != address(0), "Invalid farmer address");
         require(collateralAmount > 0, "Collateral required");
         require(loanAmount > 0, "Loan amount required");
@@ -186,8 +195,17 @@ contract LendingPool is ReentrancyGuard {
         // Release collateral (LendingPool contract has BANK_ROLE)
         rangerToken.unpledgeCollateral(offer.tokenId, msg.sender, offer.collateralAmount);
 
-        // Transfer repayment to lender
-        (bool success, ) = payable(offer.lender).call{value: activeLoan.amountDue}("");
+        // Calculate platform fee (% of interest earned)
+        uint256 interestPaid = activeLoan.amountDue - offer.loanAmount;
+        uint256 platformFee = (interestPaid * platformFeeRate) / 10000; // Basis points
+        uint256 lenderAmount = activeLoan.amountDue - platformFee;
+
+        // Collect platform fee
+        collectedFees += platformFee;
+        emit PlatformFeeCollected(platformFee, collectedFees);
+
+        // Transfer repayment to lender (minus platform fee)
+        (bool success, ) = payable(offer.lender).call{value: lenderAmount}("");
         require(success, "Repayment transfer failed");
 
         // Refund excess
@@ -196,7 +214,7 @@ contract LendingPool is ReentrancyGuard {
             require(refundSuccess, "Refund failed");
         }
 
-        emit LoanRepaid(offerId, block.timestamp);
+        emit LoanRepaid(offerId, block.timestamp, platformFee);
     }
 
     /**
@@ -255,6 +273,42 @@ contract LendingPool is ReentrancyGuard {
     {
         ActiveLoan memory loan = activeLoans[farmer][tokenId];
         return (loan.offerId, loan.disbursedAt, loan.dueDate, loan.amountDue, loan.offerId != 0);
+    }
+
+    /**
+     * @notice Withdraw collected platform fees (only admin)
+     */
+    function withdrawPlatformFees() external nonReentrant {
+        require(msg.sender == platformAdmin, "Only admin can withdraw");
+        require(collectedFees > 0, "No fees to withdraw");
+
+        uint256 amount = collectedFees;
+        collectedFees = 0;
+
+        (bool success, ) = payable(platformAdmin).call{value: amount}("");
+        require(success, "Withdrawal failed");
+
+        emit PlatformFeeWithdrawn(platformAdmin, amount);
+    }
+
+    /**
+     * @notice Update platform fee rate (only admin)
+     * @param newFeeRate New fee rate in basis points (e.g., 500 = 5%)
+     */
+    function updatePlatformFeeRate(uint256 newFeeRate) external {
+        require(msg.sender == platformAdmin, "Only admin");
+        require(newFeeRate <= 1000, "Fee rate too high (max 10%)");
+        platformFeeRate = newFeeRate;
+    }
+
+    /**
+     * @notice Transfer platform admin role
+     * @param newAdmin New admin address
+     */
+    function transferPlatformAdmin(address newAdmin) external {
+        require(msg.sender == platformAdmin, "Only admin");
+        require(newAdmin != address(0), "Invalid address");
+        platformAdmin = newAdmin;
     }
 
     // Receive function to accept loan repayments and collateral funds

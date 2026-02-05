@@ -22,6 +22,11 @@ contract RangerToken is ERC1155, AccessControl, ERC1155Supply, Pausable {
     mapping(uint256 => string) private _tokenURIs; // tokenId => IPFS URI
     mapping(uint256 => uint256) public receiptExpiry; // tokenId => expiry timestamp
     mapping(uint256 => uint256) public receiptCreation; // tokenId => creation timestamp
+    mapping(uint256 => address) public tokenMinter; // tokenId => warehouse that minted it
+    
+    // Track active tokens per warehouse
+    mapping(address => uint256[]) private warehouseTokens; // warehouse => array of tokenIds
+    mapping(address => mapping(uint256 => uint256)) private warehouseTokenIndex; // warehouse => tokenId => index in array
 
     // Pledge tracking (for loan collateral)
     struct PledgeInfo {
@@ -92,6 +97,11 @@ contract RangerToken is ERC1155, AccessControl, ERC1155Supply, Pausable {
         _tokenURIs[tokenId] = ipfsHash;
         receiptExpiry[tokenId] = expiryTimestamp;
         receiptCreation[tokenId] = block.timestamp;
+        tokenMinter[tokenId] = msg.sender; // Track which warehouse minted this token
+        
+        // Add to warehouse's token list
+        warehouseTokens[msg.sender].push(tokenId);
+        warehouseTokenIndex[msg.sender][tokenId] = warehouseTokens[msg.sender].length - 1;
 
         emit ReceiptIssued(tokenId, farmer, quantity, expiryTimestamp, ipfsHash);
         return tokenId;
@@ -101,7 +111,7 @@ contract RangerToken is ERC1155, AccessControl, ERC1155Supply, Pausable {
      * @notice Pledge tokens as collateral for a loan
      * @param tokenId The token ID to pledge
      * @param amount Quantity to pledge (in kg)
-     * @param lender Address of the bank/lender
+     * @param lender Address of the lender (can be anyone - bank, individual, or entity)
      */
     function pledgeCollateral(
         uint256 tokenId,
@@ -111,7 +121,8 @@ contract RangerToken is ERC1155, AccessControl, ERC1155Supply, Pausable {
         require(isValid(tokenId), "Receipt expired");
         require(balanceOf(msg.sender, tokenId) >= amount, "Insufficient balance");
         require(amount > 0, "Amount must be > 0");
-        require(roleRegistry.isBankActive(lender), "Lender not active");
+        require(lender != address(0), "Invalid lender address");
+        // Removed bank role check - anyone can be a lender
 
         PledgeInfo storage pledge = pledges[tokenId][msg.sender];
         require(!pledge.isActive || pledge.lender == lender, "Already pledged to different lender");
@@ -279,4 +290,44 @@ contract RangerToken is ERC1155, AccessControl, ERC1155Supply, Pausable {
     {
         return super.supportsInterface(interfaceId);
     }
+
+    /**
+     * @notice Check if a warehouse has any active (non-expired, non-zero balance) tokens
+     * @dev Called by RoleRegistry to prevent deactivation of warehouses with active tokens
+     * @param warehouse Address of the warehouse to check
+     * @return bool True if warehouse has any active tokens with non-zero supply
+     */
+    function hasActiveTokens(address warehouse) external view returns (bool) {
+        uint256[] memory tokens = warehouseTokens[warehouse];
+        
+        for (uint256 i = 0; i < tokens.length; i++) {
+            uint256 tokenId = tokens[i];
+            
+            // Check if token is still valid (not expired) AND has supply
+            if (isValid(tokenId) && totalSupply(tokenId) > 0) {
+                return true; // Found at least one active token
+            }
+        }
+        
+        return false; // No active tokens found
+    }
+
+    /**
+     * @notice Get all tokens minted by a specific warehouse
+     * @param warehouse Address of the warehouse
+     * @return Array of token IDs minted by the warehouse
+     */
+    function getWarehouseTokens(address warehouse) external view returns (uint256[] memory) {
+        return warehouseTokens[warehouse];
+    }
+
+    /**
+     * @notice Get the warehouse that minted a specific token
+     * @param tokenId The token ID to query
+     * @return Address of the warehouse that minted the token
+     */
+    function getTokenMinter(uint256 tokenId) external view returns (address) {
+        return tokenMinter[tokenId];
+    }
 }
+

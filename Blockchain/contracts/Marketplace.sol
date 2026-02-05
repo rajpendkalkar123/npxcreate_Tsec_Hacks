@@ -14,6 +14,11 @@ contract Marketplace is ReentrancyGuard {
     RangerToken public rangerToken;
     IFinternetGateway public finternetGateway;
 
+    // Platform fee configuration
+    address public platformAdmin;
+    uint256 public platformFeeRate = 250; // 2.5% of sale price (250 basis points)
+    uint256 public collectedFees; // Total fees collected
+
     struct Listing {
         address seller;
         uint256 tokenId;
@@ -40,14 +45,18 @@ contract Marketplace is ReentrancyGuard {
         uint256 indexed listingId,
         address indexed buyer,
         uint256 quantity,
-        uint256 totalPrice
+        uint256 totalPrice,
+        uint256 platformFee
     );
+    event PlatformFeeCollected(uint256 amount, uint256 totalCollected);
+    event PlatformFeeWithdrawn(address indexed admin, uint256 amount);
 
     constructor(address _rangerToken, address _finternetGateway) {
         require(_rangerToken != address(0), "Invalid token address");
         require(_finternetGateway != address(0), "Invalid gateway address");
         rangerToken = RangerToken(_rangerToken);
         finternetGateway = IFinternetGateway(_finternetGateway);
+        platformAdmin = msg.sender; // Deployer is the platform admin
     }
 
     /**
@@ -117,6 +126,10 @@ contract Marketplace is ReentrancyGuard {
         uint256 totalPrice = quantity * listing.pricePerKg;
         require(msg.value >= totalPrice, "Insufficient payment");
 
+        // Calculate platform fee
+        uint256 platformFee = (totalPrice * platformFeeRate) / 10000; // Basis points
+        uint256 sellerAmount = totalPrice - platformFee;
+
         // Update listing
         listing.quantity -= quantity;
         if (listing.quantity == 0) {
@@ -132,13 +145,17 @@ contract Marketplace is ReentrancyGuard {
             ""
         );
 
-        // Payment settlement via Finternet Gateway
+        // Collect platform fee
+        collectedFees += platformFee;
+        emit PlatformFeeCollected(platformFee, collectedFees);
+
+        // Payment settlement to seller (minus platform fee)
         bytes32 paymentRef = keccak256(abi.encodePacked(listingId, msg.sender, block.timestamp));
-        (bool paymentSuccess, ) = payable(listing.seller).call{value: totalPrice}("");
+        (bool paymentSuccess, ) = payable(listing.seller).call{value: sellerAmount}("");
         require(paymentSuccess, "Payment transfer failed");
 
         // Alternatively, use Finternet Gateway (if configured):
-        // finternetGateway.initiatePayment(listing.seller, totalPrice, paymentRef);
+        // finternetGateway.initiatePayment(listing.seller, sellerAmount, paymentRef);
 
         // Refund excess payment
         if (msg.value > totalPrice) {
@@ -146,7 +163,7 @@ contract Marketplace is ReentrancyGuard {
             require(refundSuccess, "Refund failed");
         }
 
-        emit PurchaseCompleted(listingId, msg.sender, quantity, totalPrice);
+        emit PurchaseCompleted(listingId, msg.sender, quantity, totalPrice, platformFee);
     }
 
     /**
@@ -183,5 +200,41 @@ contract Marketplace is ReentrancyGuard {
             listing.isActive,
             listing.createdAt
         );
+    }
+
+    /**
+     * @notice Withdraw collected platform fees (only admin)
+     */
+    function withdrawPlatformFees() external nonReentrant {
+        require(msg.sender == platformAdmin, "Only admin can withdraw");
+        require(collectedFees > 0, "No fees to withdraw");
+
+        uint256 amount = collectedFees;
+        collectedFees = 0;
+
+        (bool success, ) = payable(platformAdmin).call{value: amount}("");
+        require(success, "Withdrawal failed");
+
+        emit PlatformFeeWithdrawn(platformAdmin, amount);
+    }
+
+    /**
+     * @notice Update platform fee rate (only admin)
+     * @param newFeeRate New fee rate in basis points (e.g., 250 = 2.5%)
+     */
+    function updatePlatformFeeRate(uint256 newFeeRate) external {
+        require(msg.sender == platformAdmin, "Only admin");
+        require(newFeeRate <= 1000, "Fee rate too high (max 10%)");
+        platformFeeRate = newFeeRate;
+    }
+
+    /**
+     * @notice Transfer platform admin role
+     * @param newAdmin New admin address
+     */
+    function transferPlatformAdmin(address newAdmin) external {
+        require(msg.sender == platformAdmin, "Only admin");
+        require(newAdmin != address(0), "Invalid address");
+        platformAdmin = newAdmin;
     }
 }
