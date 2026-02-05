@@ -12,11 +12,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import Image from 'next/image'
 
 export function CropInspectionForm() {
-  const { contracts, address } = useWeb3()
+  const { contracts, address, authMethod } = useWeb3()
   const [loading, setLoading] = useState(false)
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
   const [tokenId, setTokenId] = useState<string | null>(null)
-  const [demoMode, setDemoMode] = useState(false)
 
   // Form state
   const [farmerAddress, setFarmerAddress] = useState('')
@@ -30,50 +29,23 @@ export function CropInspectionForm() {
   const [stackLocation, setStackLocation] = useState('')
   const [insurancePolicyNo, setInsurancePolicyNo] = useState('')
 
-  const handleDemoMode = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-
-    try {
-      // Simulate processing
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      const mockTokenId = Math.floor(Math.random() * 10000).toString()
-      const qrData = JSON.stringify({
-        tokenId: mockTokenId,
-        farmerAddress: farmerAddress || '0x0000000000000000000000000000000000000000',
-        quantity: quantity || '1000',
-        commodityName: commodityName || 'Wheat',
-        ipfsUri: 'ipfs://QmDemo123456789',
-        timestamp: Date.now(),
-        demo: true
-      })
-
-      const qrUrl = await QRCode.toDataURL(qrData, {
-        width: 300,
-        margin: 2,
-        color: { dark: '#16a34a', light: '#ffffff' }
-      })
-
-      setTokenId(mockTokenId)
-      setQrCodeUrl(qrUrl)
-    } catch (error) {
-      console.error('Demo mode error:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleInspectionComplete = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Use demo mode if enabled
-    if (demoMode) {
-      return handleDemoMode(e)
+    // Check if user is using Privy - they need to switch to MetaMask for blockchain
+    if (authMethod === 'privy') {
+      alert('⚠️ Blockchain Transactions Require MetaMask\n\n' +
+            'Privy login is for browsing only. To issue eNWR tokens:\n\n' +
+            '1. Logout from current session\n' +
+            '2. Login again and select "MetaMask" option\n' +
+            '3. Connect your MetaMask wallet\n' +
+            '4. Make sure your wallet is registered as a warehouse\n\n' +
+            '💡 Your wallet needs test ETH and warehouse permissions.')
+      return
     }
 
-    if (!contracts.rangerToken) {
-      alert('Please connect wallet first or enable Demo Mode')
+    if (!contracts.rangerToken || !address) {
+      alert('Please connect your MetaMask wallet to issue eNWR tokens')
       return
     }
 
@@ -120,12 +92,23 @@ export function CropInspectionForm() {
       const expiryTimestamp = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60)
       
       console.log('📝 Issuing eNWR token on blockchain...')
-      console.log('Parameters:', {
+      console.log('🔑 Signer address:', address)
+      console.log('📋 Parameters:', {
         to: farmerAddress,
         quantity: quantity,
         expiry: expiryTimestamp,
         uri: ipfsUrl
       })
+
+      // Check if warehouse is registered
+      const isActive = await contracts.roleRegistry.isWarehouseActive(address)
+      console.log('🏢 Warehouse active status:', isActive)
+      
+      if (!isActive) {
+        alert(`❌ ERROR: Your wallet (${address}) is not registered as an active warehouse!\n\nPlease ask an admin to register your wallet address as a warehouse before issuing tokens.`)
+        setLoading(false)
+        return
+      }
 
       const tx = await contracts.rangerToken.issueReceipt(
         farmerAddress,
@@ -178,7 +161,7 @@ export function CropInspectionForm() {
       // Better error messages
       if (error.code === 'CALL_EXCEPTION') {
         if (error.data && error.data.includes('e2517d3f')) {
-          alert('⚠️ Authorization Error: Your wallet address does not have MINTER_ROLE.\n\nTo fix this:\n1. Open terminal in Blockchain folder\n2. Run: npx hardhat console --network hoodi\n3. Execute:\n   const RangerToken = await ethers.getContractAt("RangerToken", "0x6f2BABe73a29295d9650525bBcFF98A585b55E5b")\n   await RangerToken.grantRole(ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE")), "' + address + '")\n\nOr login with the deployer wallet.')
+          alert('⚠️ Authorization Error: Your wallet does not have MINTER_ROLE.\n\nTo fix this:\n1. Go to Admin Panel → Role Management\n2. Register your warehouse with WDRA details\n3. MINTER_ROLE will be automatically granted!\n\nOr contact the platform admin.')
         } else {
           alert('Smart contract call failed. Check that:\n- Farmer address is valid\n- You have MINTER_ROLE\n- Contract is deployed correctly')
         }
@@ -221,48 +204,66 @@ export function CropInspectionForm() {
 
   return (
     <form onSubmit={handleInspectionComplete} className="max-w-2xl mx-auto space-y-6 p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Crop Inspection & eNWR Issuance</h2>
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Demo Mode</label>
-          <button
-            type="button"
-            onClick={() => setDemoMode(!demoMode)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              demoMode ? 'bg-green-600' : 'bg-gray-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                demoMode ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
-      </div>
-
-      {demoMode && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
+      {/* Wallet Address Display */}
+      {address && (
+        <div className={`border rounded-lg p-3 mb-4 ${
+          authMethod === 'metamask' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={`text-xs font-semibold ${
+                authMethod === 'metamask' ? 'text-green-600' : 'text-blue-600'
+              }`}>
+                {authMethod === 'metamask' ? '🦊 MetaMask Wallet' : '🔑 Privy Wallet (View Only)'}
+              </p>
+              <code className={`text-sm font-mono ${
+                authMethod === 'metamask' ? 'text-green-900' : 'text-blue-900'
+              }`}>
+                {address}
+              </code>
             </div>
-            <div className="ml-3">
-              <p className="text-sm text-yellow-700">
-                <strong>Demo Mode Enabled:</strong> Form will generate mock QR code without blockchain transaction. Perfect for UI testing!
+            <div className="text-right">
+              <p className={`text-xs ${
+                authMethod === 'metamask' ? 'text-green-600' : 'text-blue-600'
+              }`}>
+                {authMethod === 'metamask' ? '✅ Can issue tokens' : '⚠️ Logout & use MetaMask'}
               </p>
             </div>
           </div>
         </div>
       )}
 
+      {/* Warning for Privy users */}
+      {authMethod === 'privy' && (
+        <div className="bg-orange-50 border-l-4 border-orange-500 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-orange-800">⚠️ MetaMask Required for Blockchain Transactions</h3>
+              <div className="mt-2 text-sm text-orange-700">
+                <p>You're logged in with Privy (view-only mode). To issue eNWR tokens on blockchain:</p>
+                <ol className="list-decimal ml-5 mt-2 space-y-1">
+                  <li><strong>Logout</strong> from current session</li>
+                  <li><strong>Login again</strong> and connect with <strong>MetaMask</strong></li>
+                  <li>Ensure your MetaMask wallet has test ETH and warehouse permissions</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <h2 className="text-2xl font-bold text-gray-900">Crop Inspection & eNWR Issuance</h2>
+
       <Card>
         <CardHeader><CardTitle>Depositor Information</CardTitle></CardHeader>
         <CardContent>
-          <Label htmlFor="farmer">Farmer Wallet Address {demoMode && <span className="text-gray-400">(optional in demo)</span>}</Label>
-          <Input id="farmer" placeholder="0x..." value={farmerAddress} onChange={(e) => setFarmerAddress(e.target.value)} required={!demoMode} />
+          <Label htmlFor="farmer">Farmer Wallet Address</Label>
+          <Input id="farmer" placeholder="0x..." value={farmerAddress} onChange={(e) => setFarmerAddress(e.target.value)} required />
         </CardContent>
       </Card>
 
@@ -335,10 +336,7 @@ export function CropInspectionForm() {
       </Card>
 
       <Button type="submit" disabled={loading} className="w-full" size="lg">
-        {loading 
-          ? (demoMode ? '🎭 Generating Demo QR...' : '⏳ Issuing eNWR on Blockchain...') 
-          : (demoMode ? '🎭 Generate Demo QR Code' : '✅ Issue eNWR & Generate QR')
-        }
+        {loading ? '⏳ Issuing eNWR on Blockchain...' : '✅ Issue eNWR & Generate QR'}
       </Button>
     </form>
   )
