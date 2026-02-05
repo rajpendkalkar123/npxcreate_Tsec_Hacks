@@ -201,9 +201,10 @@ describe("Croplock - Complete Integration Tests", function () {
       await rangerToken.connect(farmer1).setApprovalForAll(await marketplace.getAddress(), true);
 
       const totalPrice = pricePerKg * 1000n; // Buy 1000 kg
+      const platformFee = (totalPrice * 250n) / 10000n; // 2.5% fee
       await expect(marketplace.connect(buyer).buyToken(1, 1000, { value: totalPrice }))
         .to.emit(marketplace, "PurchaseCompleted")
-        .withArgs(1, buyer.address, 1000, totalPrice);
+        .withArgs(1, buyer.address, 1000, totalPrice, platformFee);
 
       expect(await rangerToken.balanceOf(buyer.address, 1)).to.equal(1000);
     });
@@ -280,10 +281,11 @@ describe("Croplock - Complete Integration Tests", function () {
       // Calculate repayment amount
       const interest = (loanAmount * BigInt(interestRate)) / 10000n;
       const amountDue = loanAmount + interest;
+      const platformFee = (interest * 500n) / 10000n; // 5% of interest
 
       await expect(lendingPool.connect(farmer1).repayLoan(1, { value: amountDue }))
         .to.emit(lendingPool, "LoanRepaid")
-        .withArgs(1, await time.latest() + 1);
+        .withArgs(1, await time.latest() + 1, platformFee);
 
       // Check collateral released
       const pledgeStatus = await rangerToken.getPledgeStatus(1, farmer1.address);
