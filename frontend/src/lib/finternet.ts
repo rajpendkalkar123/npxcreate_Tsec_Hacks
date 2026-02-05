@@ -33,7 +33,7 @@ export async function createMarketplacePayment(
   currency: string = 'USD',
   metadata?: any
 ): Promise<PaymentIntentResponse> {
-  const response = await finternetClient.post('/payment-intents', {
+  const payload = {
     amount,
     currency,
     type: 'DELIVERY_VS_PAYMENT',
@@ -46,7 +46,14 @@ export async function createMarketplacePayment(
       autoRelease: true,
       ...metadata
     }
-  })
+  }
+  
+  console.log('📤 Sending to Finternet API:', payload)
+  
+  const response = await finternetClient.post('/payment-intents', payload)
+  
+  console.log('📥 Finternet response:', response.data)
+  
   return response.data
 }
 
@@ -102,7 +109,7 @@ export async function getEscrowDetails(intentId: string) {
 }
 
 /**
- * Submit Delivery Proof
+ * Submit Delivery Proof (Note: May not be available on test API)
  */
 export async function submitDeliveryProof(
   intentId: string,
@@ -110,15 +117,21 @@ export async function submitDeliveryProof(
   proofURI: string,
   submittedBy: string
 ) {
-  const response = await finternetClient.post(
-    `/payment-intents/${intentId}/escrow/delivery-proof`,
-    {
-      proofHash,
-      proofURI,
-      submittedBy
-    }
-  )
-  return response.data
+  try {
+    const response = await finternetClient.post(
+      `/payment-intents/${intentId}/escrow/delivery-proof`,
+      {
+        proofHash,
+        proofURI,
+        submittedBy
+      }
+    )
+    return response.data
+  } catch (error: any) {
+    // Endpoint may not exist on test API - log but don't throw
+    console.warn('Delivery proof endpoint not available:', error.message)
+    throw error // Re-throw so caller can handle
+  }
 }
 
 export default finternetClient

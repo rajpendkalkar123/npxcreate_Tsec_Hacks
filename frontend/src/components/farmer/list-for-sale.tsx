@@ -28,6 +28,61 @@ export function ListForSale({ tokenId, availableBalance, commodityName, onSucces
     try {
       setLoading(true)
 
+      // Check pledge status first
+      const pledgeStatus = await contracts.rangerToken.getPledgeStatus(tokenId, address)
+      const isPledged = pledgeStatus[0]
+      const pledgedAmount = pledgeStatus[2]
+      const actualAvailableBalance = availableBalance - pledgedAmount
+
+      console.log('📊 Token status:', {
+        totalBalance: availableBalance.toString(),
+        isPledged,
+        pledgedAmount: pledgedAmount.toString(),
+        availableToSell: actualAvailableBalance.toString(),
+        tryingToSell: quantity
+      })
+
+      if (isPledged && BigInt(quantity) > actualAvailableBalance) {
+        alert(`⚠️ Insufficient unpledged balance!\n\nTotal balance: ${availableBalance} kg\nPledged as loan collateral: ${pledgedAmount} kg\nAvailable to sell: ${actualAvailableBalance} kg\n\nYou're trying to sell: ${quantity} kg\n\nPlease reduce the quantity or repay your loan first.`)
+        setLoading(false)
+        return
+      }
+
+      if (actualAvailableBalance === BigInt(0)) {
+        alert(`⚠️ Cannot list this token!\n\nAll ${availableBalance} kg are pledged as loan collateral.\n\nPlease repay your loan to unlock these tokens.`)
+        setLoading(false)
+        return
+      }
+
+      // ✅ NEW: Check if this token is already listed
+      console.log('🔍 Checking for existing listings...')
+      let alreadyListed = false
+      for (let listingId = 1; listingId <= 50; listingId++) {
+        try {
+          const listing = await contracts.marketplace.getListing(BigInt(listingId))
+          
+          // Check if this seller already has an active listing for this token
+          if (
+            listing.isActive && 
+            listing.seller.toLowerCase() === address.toLowerCase() && 
+            listing.tokenId === tokenId
+          ) {
+            alreadyListed = true
+            console.log(`⚠️ Found existing listing #${listingId} for this token`)
+            break
+          }
+        } catch {
+          // Listing doesn't exist, stop checking
+          break
+        }
+      }
+      
+      if (alreadyListed) {
+        alert(`⚠️ You already have an active listing for this token!\n\nPlease cancel your existing listing first, or wait for it to be purchased.\n\nNote: You cannot create multiple listings for the same token.`)
+        setLoading(false)
+        return
+      }
+
       // Step 1: Approve marketplace
       const marketplaceAddress = await contracts.marketplace.getAddress()
       const isApproved = await contracts.rangerToken.isApprovedForAll(
@@ -49,13 +104,26 @@ export function ListForSale({ tokenId, availableBalance, commodityName, onSucces
         BigInt(quantity),
         parseEther(pricePerKg)
       )
-      await listTx.wait()
+      const receipt = await listTx.wait()
 
-      alert('Listed successfully! Buyers can now purchase your commodity.')
+      console.log('✅ Listed successfully! Transaction:', receipt.hash)
+      alert(`✅ Listed successfully!\n\nYour token is now on the marketplace.\nTransaction: ${receipt.hash}\n\nRefreshing to update your balance...`)
+      
+      // Call success callback THEN refresh page
       onSuccess?.()
-    } catch (error) {
+      
+      // Force page reload to update all balances
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    } catch (error: any) {
       console.error('Listing failed:', error)
-      alert('Transaction failed. Please try again.')
+      
+      if (error.reason === 'Insufficient unpledged balance') {
+        alert(`❌ Listing failed: Insufficient unpledged balance\n\nThis token is pledged as loan collateral.\nYou can only sell the unpledged portion.\n\nPlease reduce the quantity or repay your loan.`)
+      } else {
+        alert(`❌ Transaction failed: ${error.reason || error.message || 'Unknown error'}`)
+      }
     } finally {
       setLoading(false)
     }

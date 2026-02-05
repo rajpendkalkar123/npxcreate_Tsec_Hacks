@@ -4,6 +4,7 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useWeb3 } from "@/lib/web3Provider"
 import { useRouter } from "next/navigation"
+import { LanguageToggle } from "@/components/language-toggle"
 
 export function SiteHeader() {
   const { address, role, disconnectWallet } = useWeb3()
@@ -37,6 +38,7 @@ export function SiteHeader() {
         </div>
         
         <div className="flex items-center gap-3">
+          <LanguageToggle variant="dashboard" />
           <div className="text-sm">
             <span className="font-semibold">{getRoleBadge()}</span>
             <span className="text-gray-500 ml-2">

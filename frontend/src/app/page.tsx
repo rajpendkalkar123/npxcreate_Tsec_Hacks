@@ -2,10 +2,17 @@
 "use client"
 
 import { LoginForm } from "@/components/login-form"
+import { LanguageToggle } from "@/components/language-toggle"
+import { useLanguage } from "@/lib/languageContext"
 
 export default function LandingPage() {
+  const { t } = useLanguage()
+  
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#074d2f] p-6 lg:p-12 relative overflow-hidden">
+      {/* Language Toggle Button */}
+      <LanguageToggle variant="landing" />
+      
       {/* Decorative background element for texture (optional) */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#0a633d] rounded-full blur-[120px] opacity-50" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#0a633d] rounded-full blur-[120px] opacity-50" />
@@ -21,22 +28,22 @@ export default function LandingPage() {
           </div>
           
           <h1 className="text-5xl font-extrabold tracking-tight sm:text-7xl mb-8 leading-[1.1]">
-            Tokenize. <span className="text-green-300">Secure.</span> <br />
-            Grow.
+            {t('Tokenize.')} <span className="text-green-300">{t('Secure.')}</span> <br />
+            {t('Grow.')}
           </h1>
           
           <p className="text-xl text-white/80 mb-12 leading-relaxed max-w-lg mx-auto lg:mx-0">
-            Digitizing agricultural value chains through <span className="text-white font-semibold underline decoration-green-400">eWR tokenization</span>. Unlock instant liquidity for your harvest with our self-custody wallet.
+            {t('Digitizing agricultural value chains through')} <span className="text-white font-semibold underline decoration-green-400">{t('eWR tokenization')}</span>. {t('Unlock instant liquidity for your harvest with our self-custody wallet.')}
           </p>
 
           <div className="grid grid-cols-2 gap-8 border-t border-white/10 pt-10 text-left">
             <div className="space-y-2">
-              <h3 className="font-bold text-green-300 text-lg">Digital Receipts</h3>
-              <p className="text-sm text-white/60">Convert physical warehouse receipts into digital assets.</p>
+              <h3 className="font-bold text-green-300 text-lg">{t('Digital Receipts')}</h3>
+              <p className="text-sm text-white/60">{t('Convert physical warehouse receipts into digital assets.')}</p>
             </div>
             <div className="space-y-2">
-              <h3 className="font-bold text-green-300 text-lg">Direct Liquidity</h3>
-              <p className="text-sm text-white/60">Instant capital access via Finternet blockchain protocols.</p>
+              <h3 className="font-bold text-green-300 text-lg">{t('Direct Liquidity')}</h3>
+              <p className="text-sm text-white/60">{t('Instant capital access via Finternet blockchain protocols.')}</p>
             </div>
           </div>
         </div>

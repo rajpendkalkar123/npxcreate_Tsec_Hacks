@@ -124,8 +124,24 @@ export function CropInspectionForm() {
         to: farmerAddress,
         quantity: quantity,
         expiry: expiryTimestamp,
-        uri: ipfsUrl
+        uri: ipfsUrl,
+        issuer: address
       })
+
+      // Check if wallet has MINTER_ROLE before attempting
+      try {
+        const MINTER_ROLE = '0x9f2df0fed2c77648de5860a4cc508cd0818c85b8b8a1ab4ceeef8d981c8956a6'
+        const hasRole = await contracts.rangerToken.hasRole(MINTER_ROLE, address)
+        console.log(`Has MINTER_ROLE: ${hasRole}`)
+        
+        if (!hasRole) {
+          alert(`❌ Authorization Error: Your wallet ${address} does not have MINTER_ROLE.\n\nPlease contact admin or enable Demo Mode.`)
+          setLoading(false)
+          return
+        }
+      } catch (roleCheckError) {
+        console.error('Role check failed:', roleCheckError)
+      }
 
       const tx = await contracts.rangerToken.issueReceipt(
         farmerAddress,
@@ -177,13 +193,17 @@ export function CropInspectionForm() {
       
       // Better error messages
       if (error.code === 'CALL_EXCEPTION') {
-        if (error.data && error.data.includes('e2517d3f')) {
+        if (error.reason === 'Insufficient balance') {
+          alert(`⚠️ Unexpected Error: "Insufficient balance"\n\nThis shouldn't happen during minting. Possible causes:\n1. The contract might be checking a balance incorrectly\n2. Try with a smaller quantity first\n3. Use Demo Mode to test the UI\n\nCurrent quantity: ${quantity} kg\nWallet: ${address}`)
+        } else if (error.data && error.data.includes('e2517d3f')) {
           alert('⚠️ Authorization Error: Your wallet address does not have MINTER_ROLE.\n\nTo fix this:\n1. Open terminal in Blockchain folder\n2. Run: npx hardhat console --network hoodi\n3. Execute:\n   const RangerToken = await ethers.getContractAt("RangerToken", "0x6f2BABe73a29295d9650525bBcFF98A585b55E5b")\n   await RangerToken.grantRole(ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE")), "' + address + '")\n\nOr login with the deployer wallet.')
+        } else if (error.reason) {
+          alert(`Smart contract error: ${error.reason}\n\nPlease enable Demo Mode or check contract configuration.`)
         } else {
-          alert('Smart contract call failed. Check that:\n- Farmer address is valid\n- You have MINTER_ROLE\n- Contract is deployed correctly')
+          alert('Smart contract call failed. Check that:\n- Farmer address is valid\n- You have MINTER_ROLE\n- Contract is deployed correctly\n\nTry enabling Demo Mode.')
         }
       } else {
-        alert('Failed to issue eNWR. See console for details.')
+        alert('Failed to issue eNWR. See console for details.\n\nTry enabling Demo Mode.')
       }
     } finally {
       setLoading(false)

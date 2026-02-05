@@ -26,52 +26,70 @@ export function AssetList({ onListForSale, onPledgeForLoan }: AssetListProps) {
   const { contracts, address } = useWeb3()
   const [tokens, setTokens] = useState<TokenData[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const fetchTokens = async () => {
+    if (!contracts.rangerToken || !address) return
+
+    try {
+      setLoading(true)
+      const ownedTokens: TokenData[] = []
+
+      for (let tokenId = BigInt(1); tokenId <= BigInt(100); tokenId++) {
+        try {
+          const balance = await contracts.rangerToken.balanceOf(address, tokenId)
+
+          if (balance > BigInt(0)) {
+            const [uri, isValid, pledgeStatus] = await Promise.all([
+              contracts.rangerToken.uri(tokenId),
+              contracts.rangerToken.isValid(tokenId),
+              contracts.rangerToken.getPledgeStatus(tokenId, address)
+            ])
+
+            // Fetch metadata with fallback
+            let metadata = null
+            try {
+              metadata = await fetchIPFSMetadata(uri)
+            } catch (metadataError) {
+              console.warn(`⚠️ Failed to fetch metadata for token #${tokenId}, using fallback`)
+              // Create fallback metadata
+              metadata = {
+                name: `eNWR Token #${tokenId}`,
+                attributes: [
+                  { trait_type: 'Commodity Name', value: 'Unknown' },
+                  { trait_type: 'Receipt Number', value: tokenId.toString() }
+                ]
+              }
+            }
+
+            ownedTokens.push({
+              tokenId,
+              balance,
+              metadataUri: uri,
+              metadata,
+              isValid,
+              isPledged: pledgeStatus[0],
+              pledgeAmount: pledgeStatus[2]
+            })
+          }
+        } catch (tokenError) {
+          // Token doesn't exist, stop searching
+          break
+        }
+      }
+
+      console.log(`✅ Found ${ownedTokens.length} tokens owned by ${address}`)
+      setTokens(ownedTokens)
+    } catch (error) {
+      console.error('Failed to fetch tokens:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchTokens = async () => {
-      if (!contracts.rangerToken || !address) return
-
-      try {
-        const ownedTokens: TokenData[] = []
-
-        for (let tokenId = BigInt(1); tokenId <= BigInt(100); tokenId++) {
-          try {
-            const balance = await contracts.rangerToken.balanceOf(address, tokenId)
-
-            if (balance > BigInt(0)) {
-              const [uri, isValid, pledgeStatus] = await Promise.all([
-                contracts.rangerToken.uri(tokenId),
-                contracts.rangerToken.isValid(tokenId),
-                contracts.rangerToken.getPledgeStatus(tokenId, address)
-              ])
-
-              const metadata = await fetchIPFSMetadata(uri)
-
-              ownedTokens.push({
-                tokenId,
-                balance,
-                metadataUri: uri,
-                metadata,
-                isValid,
-                isPledged: pledgeStatus[0],
-                pledgeAmount: pledgeStatus[2]
-              })
-            }
-          } catch {
-            break
-          }
-        }
-
-        setTokens(ownedTokens)
-      } catch (error) {
-        console.error('Failed to fetch tokens:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchTokens()
-  }, [contracts, address])
+  }, [contracts, address, refreshKey])
 
   if (loading) {
     return (
@@ -85,14 +103,24 @@ export function AssetList({ onListForSale, onPledgeForLoan }: AssetListProps) {
   if (tokens.length === 0) {
     return (
       <div className="text-center py-12 bg-gray-50 rounded-lg">
-        <p className="text-gray-600">No eNWR tokens found</p>
-        <p className="text-sm text-gray-500 mt-2">Deposit commodities at warehouse to receive tokens</p>
+        <p className="text-gray-600 mb-4">No eNWR tokens found</p>
+        <p className="text-sm text-gray-500 mb-4">Deposit commodities at warehouse to receive tokens</p>
+        <Button onClick={() => setRefreshKey(k => k + 1)} variant="outline" size="sm">
+          🔄 Refresh
+        </Button>
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <p className="text-sm text-gray-600">{tokens.length} token{tokens.length !== 1 ? 's' : ''} found</p>
+        <Button onClick={() => setRefreshKey(k => k + 1)} variant="outline" size="sm" disabled={loading}>
+          🔄 Refresh Assets
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {tokens.map((token) => {
         const commodityName = token.metadata?.attributes?.find((a: any) => a.trait_type === 'Commodity Name')?.value || 'Unknown'
         const receiptNumber = token.metadata?.attributes?.find((a: any) => a.trait_type === 'Receipt Number')?.value
@@ -150,6 +178,7 @@ export function AssetList({ onListForSale, onPledgeForLoan }: AssetListProps) {
           </Card>
         )
       })}
+      </div>
     </div>
   )
 }

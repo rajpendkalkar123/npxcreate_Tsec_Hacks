@@ -28,16 +28,16 @@ import {
 const data = {
   user: { name: "Farmer Nikita", email: "nikita@agrimail.com", avatar: "/avatars/farmer.jpg" },
   navMain: [
-    { title: "Farm Overview", url: "#", icon: IconDashboard },
-    { title: "My Harvests", url: "#", icon: IconGrain },
-    { title: "Market Insights", url: "#", icon: IconChartBar },
-    { title: "Finternet Wallet", url: "#", icon: IconWallet },
-    { title: "Warehouses", url: "#", icon: IconBuildingWarehouse },
+    { title: "Farm Overview", url: "#overview", icon: IconDashboard },
+    { title: "My Harvests", url: "#harvests", icon: IconGrain },
+    { title: "Market Insights", url: "#marketplace", icon: IconChartBar },
+    { title: "Finternet Wallet", url: "#wallet", icon: IconWallet },
+    { title: "Warehouses", url: "#warehouses", icon: IconBuildingWarehouse },
   ],
   navSecondary: [
-    { title: "Yield History", url: "#", icon: IconHistory },
-    { title: "Mandi Locator", url: "#", icon: IconMapPin },
-    { title: "Settings", url: "#", icon: IconSettings },
+    { title: "Yield History", url: "#history", icon: IconHistory },
+    { title: "Mandi Locator", url: "#mandi", icon: IconMapPin },
+    { title: "Settings", url: "#settings", icon: IconSettings },
   ],
 }
 

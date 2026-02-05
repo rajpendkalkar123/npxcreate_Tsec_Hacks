@@ -124,6 +124,87 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       // Store in cookie for middleware
       document.cookie = `wallet_address=${userAddress}; path=/`
       document.cookie = "finternet_auth=true; path=/"
+
+      // 🔑 Auto-grant MINTER_ROLE if user selected 'authority'
+      const selectedRole = localStorage.getItem('user_role_manual')
+      if (selectedRole === 'authority') {
+        console.log('🏢 Setting up warehouse authority permissions...')
+        
+        try {
+          // Step 1: Register as warehouse in RoleRegistry
+          console.log('🏢 Step 1: Registering warehouse...')
+          const registerResponse = await fetch('/api/register-warehouse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: userAddress })
+          })
+          const registerData = await registerResponse.json()
+          
+          if (registerData.success) {
+            if (registerData.alreadyRegistered) {
+              console.log('✅ Already registered as warehouse:', registerData.warehouseInfo.name)
+            } else {
+              console.log('✅ Warehouse registered! Tx:', registerData.txHash)
+              console.log('📋 Warehouse Info:', registerData.warehouseInfo)
+            }
+          } else {
+            console.warn('⚠️ Failed to register warehouse:', registerData.error)
+          }
+
+          // Step 2: Grant MINTER_ROLE
+          console.log('🔑 Step 2: Granting MINTER_ROLE...')
+          const roleResponse = await fetch('/api/grant-minter-role', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: userAddress })
+          })
+          const roleData = await roleResponse.json()
+          
+          if (roleData.success) {
+            if (roleData.alreadyGranted) {
+              console.log('✅ Already has MINTER_ROLE')
+            } else {
+              console.log('✅ MINTER_ROLE granted! Tx:', roleData.txHash)
+            }
+          } else {
+            console.warn('⚠️ Failed to grant MINTER_ROLE:', roleData.error)
+          }
+
+          console.log('🎉 Warehouse authority setup complete!')
+          
+        } catch (error) {
+          console.error('❌ Failed to setup warehouse authority:', error)
+        }
+      }
+
+      // 🏦 Auto-register if user selected 'bank'
+      if (selectedRole === 'bank') {
+        console.log('🏦 Setting up bank permissions...')
+        
+        try {
+          const registerResponse = await fetch('/api/register-bank', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: userAddress })
+          })
+          const registerData = await registerResponse.json()
+          
+          if (registerData.success) {
+            if (registerData.alreadyRegistered) {
+              console.log('✅ Already registered as bank:', registerData.bankInfo.name)
+            } else {
+              console.log('✅ Bank registered! Tx:', registerData.txHash)
+              console.log('📋 Bank Info:', registerData.bankInfo)
+            }
+            console.log('🎉 Bank setup complete!')
+          } else {
+            console.warn('⚠️ Failed to register bank:', registerData.error)
+          }
+          
+        } catch (error) {
+          console.error('❌ Failed to setup bank:', error)
+        }
+      }
       
     } catch (error) {
       console.error('Wallet connection failed:', error)
